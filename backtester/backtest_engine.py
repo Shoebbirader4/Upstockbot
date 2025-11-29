@@ -188,6 +188,11 @@ class BacktestEngine:
         net_pnl = trades_df['net_pnl'].sum()
         win_rate = winning_trades / total_trades if total_trades > 0 else 0
         
+        # Average win/loss
+        avg_win = trades_df[trades_df['net_pnl'] > 0]['net_pnl'].mean() if winning_trades > 0 else 0
+        avg_loss = trades_df[trades_df['net_pnl'] < 0]['net_pnl'].mean() if losing_trades > 0 else 0
+        profit_factor = abs(avg_win * winning_trades / (avg_loss * losing_trades)) if losing_trades > 0 else 0
+        
         # Drawdown
         equity_df['peak'] = equity_df['equity'].cummax()
         equity_df['drawdown'] = equity_df['equity'] - equity_df['peak']
@@ -198,6 +203,29 @@ class BacktestEngine:
         total_return = ((equity_df['equity'].iloc[-1] - self.initial_capital) / 
                        self.initial_capital) * 100
         
+        # Calculate daily returns for Sharpe/Sortino
+        equity_df['returns'] = equity_df['equity'].pct_change()
+        daily_returns = equity_df['returns'].dropna()
+        
+        # Sharpe Ratio (assuming 252 trading days, 6% risk-free rate)
+        risk_free_rate = 0.06 / 252
+        excess_returns = daily_returns - risk_free_rate
+        sharpe_ratio = (excess_returns.mean() / excess_returns.std() * np.sqrt(252)) if excess_returns.std() > 0 else 0
+        
+        # Sortino Ratio (only downside deviation)
+        downside_returns = daily_returns[daily_returns < 0]
+        downside_std = downside_returns.std()
+        sortino_ratio = (excess_returns.mean() / downside_std * np.sqrt(252)) if downside_std > 0 else 0
+        
+        # Calmar Ratio (return / max drawdown)
+        calmar_ratio = abs(total_return / max_drawdown_pct) if max_drawdown_pct != 0 else 0
+        
+        # Recovery Factor
+        recovery_factor = abs(net_pnl / max_drawdown) if max_drawdown != 0 else 0
+        
+        # Expectancy
+        expectancy = (win_rate * avg_win) - ((1 - win_rate) * abs(avg_loss))
+        
         metrics = {
             'total_trades': total_trades,
             'winning_trades': winning_trades,
@@ -205,15 +233,24 @@ class BacktestEngine:
             'win_rate': win_rate,
             'gross_pnl': gross_pnl,
             'net_pnl': net_pnl,
+            'avg_win': avg_win,
+            'avg_loss': avg_loss,
+            'profit_factor': profit_factor,
+            'expectancy': expectancy,
             'total_return_pct': total_return,
             'max_drawdown': max_drawdown,
             'max_drawdown_pct': max_drawdown_pct,
+            'sharpe_ratio': sharpe_ratio,
+            'sortino_ratio': sortino_ratio,
+            'calmar_ratio': calmar_ratio,
+            'recovery_factor': recovery_factor,
             'final_capital': equity_df['equity'].iloc[-1],
             'trades': self.trades,
             'equity_curve': self.equity_curve
         }
         
         log.info(f"Backtest Results - Trades: {total_trades}, Win Rate: {win_rate:.2%}, "
-                f"Net PnL: {net_pnl:.2f}, Max DD: {max_drawdown_pct:.2f}%")
+                f"Net PnL: {net_pnl:.2f}, Sharpe: {sharpe_ratio:.2f}, "
+                f"Sortino: {sortino_ratio:.2f}, Calmar: {calmar_ratio:.2f}")
         
         return metrics

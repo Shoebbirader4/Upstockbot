@@ -67,17 +67,49 @@ def main():
     metrics = engine.run(df, signals, atr_values)
     
     # Display results
-    log.info("=" * 60)
+    log.info("=" * 70)
     log.info("BACKTEST RESULTS")
-    log.info("=" * 60)
-    log.info(f"Total Trades: {metrics.get('total_trades', 0)}")
-    log.info(f"Win Rate: {metrics.get('win_rate', 0):.2%}")
-    log.info(f"Gross PnL: ₹{metrics.get('gross_pnl', 0):,.2f}")
-    log.info(f"Net PnL: ₹{metrics.get('net_pnl', 0):,.2f}")
-    log.info(f"Total Return: {metrics.get('total_return_pct', 0):.2f}%")
-    log.info(f"Max Drawdown: {metrics.get('max_drawdown_pct', 0):.2f}%")
-    log.info(f"Final Capital: ₹{metrics.get('final_capital', 0):,.2f}")
-    log.info("=" * 60)
+    log.info("=" * 70)
+    log.info(f"\nTrading Performance:")
+    log.info(f"  Total Trades: {metrics.get('total_trades', 0)}")
+    log.info(f"  Winning Trades: {metrics.get('winning_trades', 0)}")
+    log.info(f"  Losing Trades: {metrics.get('losing_trades', 0)}")
+    log.info(f"  Win Rate: {metrics.get('win_rate', 0):.2%}")
+    
+    log.info(f"\nProfitability:")
+    log.info(f"  Gross PnL: ₹{metrics.get('gross_pnl', 0):,.2f}")
+    log.info(f"  Net PnL: ₹{metrics.get('net_pnl', 0):,.2f}")
+    log.info(f"  Avg Win: ₹{metrics.get('avg_win', 0):,.2f}")
+    log.info(f"  Avg Loss: ₹{metrics.get('avg_loss', 0):,.2f}")
+    log.info(f"  Profit Factor: {metrics.get('profit_factor', 0):.2f}")
+    log.info(f"  Expectancy: ₹{metrics.get('expectancy', 0):.2f}")
+    
+    log.info(f"\nReturns & Risk:")
+    log.info(f"  Total Return: {metrics.get('total_return_pct', 0):.2f}%")
+    log.info(f"  Max Drawdown: {metrics.get('max_drawdown_pct', 0):.2f}%")
+    log.info(f"  Sharpe Ratio: {metrics.get('sharpe_ratio', 0):.2f}")
+    log.info(f"  Sortino Ratio: {metrics.get('sortino_ratio', 0):.2f}")
+    log.info(f"  Calmar Ratio: {metrics.get('calmar_ratio', 0):.2f}")
+    log.info(f"  Recovery Factor: {metrics.get('recovery_factor', 0):.2f}")
+    
+    log.info(f"\nCapital:")
+    log.info(f"  Initial: ₹{config.get('backtesting.initial_capital', 1000000):,.2f}")
+    log.info(f"  Final: ₹{metrics.get('final_capital', 0):,.2f}")
+    log.info("=" * 70)
+    
+    # Performance rating
+    sharpe = metrics.get('sharpe_ratio', 0)
+    if sharpe > 2:
+        rating = "Excellent"
+    elif sharpe > 1:
+        rating = "Good"
+    elif sharpe > 0.5:
+        rating = "Fair"
+    else:
+        rating = "Poor"
+    
+    log.info(f"\nPerformance Rating: {rating} (Sharpe: {sharpe:.2f})")
+    log.info("=" * 70)
 
 if __name__ == "__main__":
     main()
