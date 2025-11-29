@@ -37,6 +37,48 @@ class UpstoxClient:
             to_date: End date
         """
         try:
+            # Upstox has limits on date range - fetch in chunks if needed
+            days_diff = (to_date - from_date).days
+            
+            if days_diff > 30:
+                # Fetch in 30-day chunks
+                log.info(f"Fetching {days_diff} days in chunks (Upstox limit: 30 days per request)")
+                all_dfs = []
+                current_start = from_date
+                
+                while current_start < to_date:
+                    current_end = min(current_start + timedelta(days=30), to_date)
+                    
+                    log.info(f"  Fetching chunk: {current_start.date()} to {current_end.date()}")
+                    chunk_df = self._fetch_single_chunk(instrument_key, interval, current_start, current_end)
+                    
+                    if not chunk_df.empty:
+                        all_dfs.append(chunk_df)
+                    
+                    current_start = current_end + timedelta(days=1)
+                
+                if not all_dfs:
+                    log.error("No data fetched from any chunk")
+                    return pd.DataFrame()
+                
+                # Combine all chunks
+                df = pd.concat(all_dfs, ignore_index=True)
+                df = df.sort_values('timestamp').drop_duplicates(subset=['timestamp']).reset_index(drop=True)
+                
+                log.info(f"Combined {len(all_dfs)} chunks into {len(df)} total candles")
+                return df
+            else:
+                # Single request for <= 30 days
+                return self._fetch_single_chunk(instrument_key, interval, from_date, to_date)
+                
+        except Exception as e:
+            log.error(f"Error fetching Upstox data: {e}")
+            return pd.DataFrame()
+    
+    def _fetch_single_chunk(self, instrument_key: str, interval: str,
+                           from_date: datetime, to_date: datetime) -> pd.DataFrame:
+        """Fetch a single chunk of historical data"""
+        try:
             # Map interval to Upstox format
             # Upstox only supports: 1minute, 30minute, day, week, month
             interval_map = {
@@ -70,20 +112,16 @@ class UpstoxClient:
                 df = df.drop('oi', axis=1)  # Drop open interest
                 df = df.sort_values('timestamp').reset_index(drop=True)
                 
-                log.info(f"Fetched {len(df)} candles from Upstox")
-                
                 # Filter market hours (9:15 - 15:30 IST)
                 df = df[
                     (df['timestamp'].dt.time >= pd.Timestamp("09:15").time()) &
                     (df['timestamp'].dt.time <= pd.Timestamp("15:30").time()) &
                     (df['timestamp'].dt.dayofweek < 5)  # Monday-Friday
                 ]
-                log.info(f"Filtered to market hours: {len(df)} candles")
                 
                 # Resample if needed (e.g., 1min to 3min)
                 if interval == '3minute' and upstox_interval == '1minute':
                     df = self._resample_to_3min(df)
-                    log.info(f"Resampled to 3-minute bars: {len(df)} candles")
                 
                 return df
             else:
@@ -94,7 +132,7 @@ class UpstoxClient:
             log.error(f"Upstox API request failed: {e}")
             return pd.DataFrame()
         except Exception as e:
-            log.error(f"Error fetching Upstox data: {e}")
+            log.error(f"Error in chunk fetch: {e}")
             return pd.DataFrame()
     
     def get_instrument_key(self, symbol: str = "NIFTY") -> str:
