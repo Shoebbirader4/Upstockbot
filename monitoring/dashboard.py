@@ -29,7 +29,8 @@ async def get_status():
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {"status": "healthy", "timestamp": str(pd.Timestamp.now())}
+    from datetime import datetime
+    return {"status": "healthy", "timestamp": datetime.now().isoformat()}
 
 @app.get("/metrics")
 async def get_metrics():
