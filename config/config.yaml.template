@@ -9,11 +9,12 @@ trading:
     timezone: "Asia/Kolkata"
   
 data:
-  source: zerodha  # zerodha, upstox
+  source: upstox  # zerodha, upstox
   fallback_source: yahoo
   storage_type: parquet  # parquet, timescaledb
   storage_path: ./data
   retention_days: 365
+  use_websocket: true  # Use live data feed (polls Upstox every 3 minutes)
   
 features:
   momentum:

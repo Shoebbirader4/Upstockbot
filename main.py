@@ -9,6 +9,7 @@ from threading import Thread
 
 from data_ingestion.data_fetcher import DataFetcher
 from data_ingestion.data_storage import DataStorage
+from data_ingestion.live_feed import LiveDataFeed
 from signal_engine.signal_generator import SignalGenerator
 from risk_manager.risk_engine import RiskEngine
 from execution_engine.order_manager import OrderManager
@@ -34,6 +35,10 @@ class TradingBot:
             storage_type=config.get('data.storage_type', 'parquet')
         )
         
+        # Live data feed (WebSocket)
+        self.live_feed = None
+        self.use_websocket = config.get('data.use_websocket', True)
+        
         # Trading state
         self.symbol = config.get('trading.asset', 'NIFTY_FUT')
         self.current_position = 0  # 0=flat, 1=long, -1=short
@@ -47,6 +52,18 @@ class TradingBot:
         """Start trading bot"""
         self.running = True
         log.info("Starting trading bot...")
+        
+        # Start live data feed if using WebSocket
+        if self.use_websocket:
+            log.info("Starting WebSocket live data feed...")
+            self.live_feed = LiveDataFeed(instrument_key="NSE_INDEX|Nifty 50")
+            self.live_feed.start()
+            
+            # Wait for data to be ready
+            log.info("Waiting for live data to be ready...")
+            while not self.live_feed.is_ready():
+                time.sleep(5)
+            log.info("Live data feed ready!")
         
         # Start dashboard in separate thread
         dashboard_thread = Thread(target=run_dashboard, daemon=True)
@@ -78,15 +95,28 @@ class TradingBot:
     def trading_cycle(self):
         """Execute one trading cycle"""
         
-        # Fetch latest data
-        end_date = get_ist_now()
-        start_date = end_date - timedelta(days=5)
-        
-        df = self.data_fetcher.fetch_historical(self.symbol, start_date, end_date)
-        
-        if df.empty or len(df) < 50:
-            log.warning("Insufficient data for trading")
-            return
+        # Get data (WebSocket or REST API)
+        if self.use_websocket and self.live_feed:
+            # Use live WebSocket data
+            df = self.live_feed.get_latest_bars(n=200)
+            
+            if df.empty or len(df) < 50:
+                log.warning("Insufficient live data for trading")
+                return
+            
+            log.info(f"Using live WebSocket data: {len(df)} bars")
+        else:
+            # Fallback to REST API
+            end_date = get_ist_now()
+            start_date = end_date - timedelta(days=5)
+            
+            df = self.data_fetcher.fetch_historical(self.symbol, start_date, end_date)
+            
+            if df.empty or len(df) < 50:
+                log.warning("Insufficient data for trading")
+                return
+            
+            log.info(f"Using REST API data: {len(df)} bars")
         
         # Save data
         self.data_storage.save_ohlcv(df, self.symbol)
@@ -99,7 +129,11 @@ class TradingBot:
         update_state('last_signal', signal_result)
         
         # Get current price and ATR
-        current_price = df['close'].iloc[-1]
+        if self.use_websocket and self.live_feed:
+            current_price = self.live_feed.get_current_price()
+        else:
+            current_price = df['close'].iloc[-1]
+        
         atr = df['ATR_14'].iloc[-1] if 'ATR_14' in df.columns else 50
         avg_atr = df['ATR_14'].mean() if 'ATR_14' in df.columns else 50
         

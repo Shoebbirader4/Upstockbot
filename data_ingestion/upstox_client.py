@@ -95,7 +95,13 @@ class UpstoxClient:
             
             upstox_interval = interval_map.get(interval, '1minute')
             
-            # Upstox API endpoint
+            # Check if requesting today's data - use intraday endpoint
+            today = datetime.now().date()
+            if to_date.date() == today:
+                log.info("Fetching intraday data for today...")
+                return self._fetch_intraday(instrument_key, upstox_interval, interval)
+            
+            # Upstox API endpoint for historical data
             url = f"{self.BASE_URL}/historical-candle/{instrument_key}/{upstox_interval}/{to_date.strftime('%Y-%m-%d')}/{from_date.strftime('%Y-%m-%d')}"
             
             response = requests.get(url, headers=self.headers, timeout=10)
@@ -133,6 +139,50 @@ class UpstoxClient:
             return pd.DataFrame()
         except Exception as e:
             log.error(f"Error in chunk fetch: {e}")
+            return pd.DataFrame()
+    
+    def _fetch_intraday(self, instrument_key: str, upstox_interval: str, original_interval: str) -> pd.DataFrame:
+        """Fetch intraday data for current day"""
+        try:
+            # Intraday endpoint
+            url = f"{self.BASE_URL}/historical-candle/intraday/{instrument_key}/{upstox_interval}"
+            
+            response = requests.get(url, headers=self.headers, timeout=10)
+            response.raise_for_status()
+            
+            data = response.json()
+            
+            if data['status'] == 'success' and 'data' in data:
+                candles = data['data']['candles']
+                
+                if not candles:
+                    log.warning("No intraday candles available")
+                    return pd.DataFrame()
+                
+                # Convert to DataFrame
+                df = pd.DataFrame(candles, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'oi'])
+                df['timestamp'] = pd.to_datetime(df['timestamp']).dt.tz_localize(None)  # Remove timezone
+                df = df.drop('oi', axis=1)  # Drop open interest
+                df = df.sort_values('timestamp').reset_index(drop=True)
+                
+                # Filter market hours (9:15 - 15:30 IST)
+                df = df[
+                    (df['timestamp'].dt.time >= pd.Timestamp("09:15").time()) &
+                    (df['timestamp'].dt.time <= pd.Timestamp("15:30").time())
+                ]
+                
+                # Resample if needed (e.g., 1min to 3min)
+                if original_interval == '3minute' and upstox_interval == '1minute':
+                    df = self._resample_to_3min(df)
+                
+                log.info(f"Fetched {len(df)} intraday bars for today")
+                return df
+            else:
+                log.error(f"Upstox intraday API error: {data}")
+                return pd.DataFrame()
+                
+        except Exception as e:
+            log.error(f"Error fetching intraday data: {e}")
             return pd.DataFrame()
     
     def get_instrument_key(self, symbol: str = "NIFTY") -> str:

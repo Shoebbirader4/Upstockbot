@@ -17,7 +17,8 @@ Complete production-ready intraday trading system for Nifty 50 using advanced ML
 - **90 Days Training Data**: Real Nifty data from Upstox
 
 ### ✅ Real Upstox Integration
-- Live data fetching (1-minute bars, resampled to 3-minute)
+- **Live Data Feed**: Real market data polling every 3 minutes
+- **Real-time Updates**: Fetches 1-minute bars, resamples to 3-minute
 - Automatic chunking for 90-day historical data
 - Real-time signal generation
 - Paper trading & live trading modes
@@ -116,9 +117,21 @@ python -m backtester.run_backtest \
     --days 30
 ```
 
-### 6. Paper Trading (Recommended)
+### 6. Test WebSocket Feed (NEW!)
 ```bash
-# Start paper trading (no real money)
+# Test real-time WebSocket data feed
+python test_websocket_feed.py
+
+# This will show live 3-minute bars updating in real-time
+# Uses mock mode by default (no credentials needed)
+```
+
+### 7. Paper Trading (Recommended)
+```bash
+# Quick start with pre-flight checks
+python start_live_trading.py
+
+# Or use main script directly
 python main.py \
     --model models/model_xgboost_*.pkl \
     --mode paper
@@ -126,7 +139,7 @@ python main.py \
 # Monitor at: http://localhost:8000
 ```
 
-### 7. Live Trading (⚠️ Real Money - Be Careful!)
+### 8. Live Trading (⚠️ Real Money - Be Careful!)
 ```bash
 # Only after 1+ week of successful paper trading
 python main.py \
@@ -134,11 +147,45 @@ python main.py \
     --mode live
 ```
 
+## 🔌 Live Data Feed
+
+The system uses **real Upstox market data** with automatic polling:
+
+### Quick Start
+```bash
+# Test live data feed
+python test_websocket_feed.py
+
+# Start live trading
+python start_live_trading.py
+```
+
+### Features
+- ✅ **Real market data** from Upstox API
+- ✅ **3-minute updates** - Polls every 3 minutes
+- ✅ **Automatic resampling** - 1-min bars → 3-min bars
+- ✅ **Historical bootstrap** with 2 days of data
+- ✅ **Production-ready** with error handling
+
+### Configuration
+```yaml
+# config/config.yaml
+data:
+  source: upstox
+  use_websocket: true  # Enable live data feed
+```
+
+**Access Token:** Set `UPSTOX_ACCESS_TOKEN` in `config/secrets.env`
+
+**See:** `WEBSOCKET_SETUP.md` for detailed setup guide
+
 ## 📁 Project Structure
 
 ```
 ├── data_ingestion/          # Upstox data fetching & storage
 │   ├── upstox_client.py    # Real Upstox API integration
+│   ├── upstox_websocket.py # WebSocket live feed (NEW!)
+│   ├── live_feed.py        # Combined WebSocket + REST (NEW!)
 │   ├── data_fetcher.py     # Historical & live data
 │   └── data_storage.py     # Parquet storage
 ├── feature_pipeline/        # 32+ advanced features
