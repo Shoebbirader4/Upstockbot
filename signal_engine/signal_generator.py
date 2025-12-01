@@ -51,8 +51,8 @@ class SignalGenerator:
             'signal': signal,  # 0=Sell, 1=Hold, 2=Buy
             'confidence': confidence,
             'probabilities': probas.tolist(),
-            'timestamp': df_features['timestamp'].iloc[-1],
-            'close_price': df_features['close'].iloc[-1]
+            'timestamp': str(df_features['timestamp'].iloc[-1]),  # Convert to string for JSON
+            'close_price': float(df_features['close'].iloc[-1])
         }
         
         signal_name = ['SELL', 'HOLD', 'BUY'][signal]
